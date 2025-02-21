@@ -1407,7 +1407,7 @@ class ExllamaV2Container:
             max_new_tokens=max_tokens,
             min_new_tokens=min_tokens,
             gen_settings=gen_settings,
-            stop_conditions=stop_conditions,
+            stop_conditions=list(set(stop_conditions)),  # Dedup any stop conditions
             decode_special_tokens=decode_special_tokens,
             filters=grammar_handler.filters,
             filter_prefer_eos=bool(grammar_handler.filters),
