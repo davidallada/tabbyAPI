@@ -461,7 +461,7 @@ async def generate_chat_completion(
 
         generations = await asyncio.gather(*gen_tasks)
 
-        logger.debug("GENERATIONS-DEBUG:\n{generations}")
+        logger.info("GENERATIONS-DEBUG:\n{generations}")
         # Let's not waste our time if we arn't running a tool model
         if data.tool_call_start:
             generations = await generate_tool_calls(data, generations, request)
