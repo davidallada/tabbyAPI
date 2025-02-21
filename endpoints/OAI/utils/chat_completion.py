@@ -231,6 +231,7 @@ async def format_messages_with_template(
     template_vars = unwrap(existing_template_vars, {})
     mm_embeddings = MultimodalEmbeddingWrapper() if model.container.use_vision else None
 
+    logger.info(f"BIG DEBUG: {[m.__dict__ for m in messages]}")
     for message in messages:
         if isinstance(message.content, list):
             concatenated_content = ""
@@ -245,6 +246,7 @@ async def format_messages_with_template(
             message.content = concatenated_content
 
         if message.tool_calls:
+            logger.info(f"{message.__dict__}\n{message.tool_calls}")
             message.tool_calls_json = json.dumps(message.tool_calls, indent=2)
 
     special_tokens_dict = model.container.get_special_tokens(
