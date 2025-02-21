@@ -322,6 +322,7 @@ async def apply_chat_template(
         # Add template metadata
         await _append_template_metadata(data, template_vars)
 
+        logger.info(f"PROMPT-DEBUG:\nMESSAGES:\n{data.messages}\nPROMPT:\n{prompt}")
         return prompt, mm_embeddings
 
     except KeyError as exc:
@@ -460,12 +461,14 @@ async def generate_chat_completion(
 
         generations = await asyncio.gather(*gen_tasks)
 
+        logger.debug("GENERATIONS-DEBUG:\n{generations}")
         # Let's not waste our time if we arn't running a tool model
         if data.tool_call_start:
             generations = await generate_tool_calls(data, generations, request)
 
+        logger.info(f"POST-TOOL-GENERATION-DEBUG: {generations}")
         response = _create_response(request.state.id, generations, model_path.name)
-
+        logger.info(f"RESPONSE-DEBUG: {response}")
         logger.info(f"Finished chat completion request {request.state.id}")
 
         return response
@@ -497,6 +500,7 @@ async def generate_tool_calls(
 
     for idx, gen in enumerate(generations):
         if gen["stop_str"] in tool_data.tool_call_start:
+            logger.info(f"TOOL-CALL-GEN-DEBUG:\n{gen}")
             if "text" in gen:
                 # non streaming, all generations will have the text they generated
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(

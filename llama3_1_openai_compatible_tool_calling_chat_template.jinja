@@ -47,7 +47,7 @@ then set this to false.
         {
             "id": "tool_id_1342",
             "function": {
-                "arguments": "arg_name": 3,
+                "arguments": {"arg_name": 3},
                 "name": "tool_name"
             },
             "type": "function"
@@ -55,13 +55,13 @@ then set this to false.
         {
             "id": "example_id_13f42",
             "function": {
-                "arguments": "example_arg": 1.0, "another_example_arg": true,
+                "arguments": {"example_arg": 1.0, "another_example_arg": true},
                 "name": "another_tool_name"
             },
             "type": "function"
         }
     ]\n' -%}
-    {%- set variable_instructions = '4. Generate all calls using the following json tool call format. Here is a multi tool call example:\n' + tool_start + example_tool_call + tool_end -%}
+    {%- set variable_instructions = '4. Generate all tool calls using the following json tool call format. Here is a multi tool call example:\n' + tool_start + example_tool_call + tool_end -%}
 {%- else -%}
     {%- set example_tool_call = '[
         {
@@ -87,7 +87,7 @@ Here are the tools available for you to call:
 ' + tools_json + '
 
 Response Guidelines:
-Carefully analyze the user input and the tools. Decide whether tool calls are necessary. If they are, invoke the tool call, otherwise, simply respond to the user in plain text.' -%}
+Carefully analyze the user input and the tools. Decide whether tool calls are necessary. If tool calls are necessary, invoke the tool call, otherwise, simply respond to the user in plain text. Only use the ' + tool_start ' prefix and the ' + tool_end ' when calling tools.' -%}
 
 {%- set tool_reminder = 'Available Tools:
 ' + tools_json + '
