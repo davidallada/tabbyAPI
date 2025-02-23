@@ -4,7 +4,8 @@ import asyncio
 import json
 import pathlib
 from asyncio import CancelledError
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
+from endpoints.OAI.native_function_calling_templates.function_calling_template_router import FUNCTION_CALLING_HANDLER_CLASSES
 from fastapi import HTTPException, Request
 from jinja2 import TemplateError
 from loguru import logger
@@ -34,7 +35,7 @@ from endpoints.OAI.types.tools import ToolCall
 
 
 def _create_response(
-    request_id: str, generations: List[dict], model_name: Optional[str]
+    request_id: str, generations: List[dict], model_name: Optional[str], tool_call_converter_str: Optional[Union[str, None]] = None
 ):
     """Create a chat completion response from the provided text."""
 
@@ -49,7 +50,7 @@ def _create_response(
 
         tool_calls = generation["tool_calls"]
         if tool_calls:
-            message.tool_calls = postprocess_tool_call(tool_calls)
+            message.tool_calls = postprocess_tool_call(tool_calls, tool_call_converter_str=tool_call_converter_str)
 
         logprob_response = None
 
@@ -115,6 +116,7 @@ def _create_stream_chunk(
     generation: Optional[dict] = None,
     model_name: Optional[str] = None,
     is_usage_chunk: bool = False,
+    tool_call_converter_str: str = None
 ):
     """Create a chat completion stream chunk from the provided text."""
 
@@ -140,7 +142,7 @@ def _create_stream_chunk(
         if "tool_calls" in generation:
             tool_calls = generation["tool_calls"]
             message = ChatCompletionMessage(
-                tool_calls=postprocess_tool_call(tool_calls)
+                tool_calls=postprocess_tool_call(tool_calls, tool_call_converter_str=tool_call_converter_str)
             )
             choice.delta = message
 
@@ -237,6 +239,9 @@ async def _append_template_metadata(data: ChatCompletionRequest, template_vars: 
     if template_metadata.tool_starts:
         if data.tool_call_start is None:
             data.tool_call_start = template_metadata.tool_starts
+
+        if template_metadata.tool_call_converter_unique_id:
+            data.tool_call_converter_unique_id = template_metadata.tool_call_converter_unique_id  # noqa: E501
 
         # Append to stop strings to halt for a tool call generation
         data.stop.extend(template_metadata.tool_starts)
@@ -400,7 +405,7 @@ async def stream_generate_chat_completion(
                 raise generation
 
             response = _create_stream_chunk(
-                request.state.id, generation, model_path.name
+                request.state.id, generation, model_path.name, tool_call_converter_str=data.get("tool_call_converter_unique_id", None)
             )
             yield response.model_dump_json()
 
@@ -413,6 +418,7 @@ async def stream_generate_chat_completion(
                         generation,
                         model_path.name,
                         is_usage_chunk=True,
+                        tool_call_converter_str=data.get("tool_call_converter_unique_id", None)
                     )
                     yield usage_chunk.model_dump_json()
 
@@ -462,7 +468,7 @@ async def generate_chat_completion(
         if data.tool_call_start:
             generations = await generate_tool_calls(data, generations, request)
 
-        response = _create_response(request.state.id, generations, model_path.name)
+        response = _create_response(request.state.id, generations, model_path.name, tool_call_converter_str=data.get("tool_call_converter_unique_id", None))
 
         logger.info(f"Finished chat completion request {request.state.id}")
 
@@ -527,8 +533,11 @@ async def generate_tool_calls(
     return generations
 
 
-def postprocess_tool_call(call_str: str) -> List[ToolCall]:
-    tool_calls = json.loads(call_str)
+def postprocess_tool_call(call_str: str, tool_call_converter_str: Optional[str] = None) -> List[ToolCall]:
+    if tool_call_converter_str and (converter_func := FUNCTION_CALLING_HANDLER_CLASSES.get(tool_call_converter_str)):
+        tool_calls = converter_func(call_str)
+    else:
+        tool_calls = json.loads(call_str)
     for tool_call in tool_calls:
         tool_call["function"]["arguments"] = json.dumps(
             tool_call["function"]["arguments"]

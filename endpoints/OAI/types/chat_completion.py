@@ -81,6 +81,7 @@ class ChatCompletionRequest(CommonCompletionRequest):
     tool_call_start: SkipJsonSchema[Optional[List[Union[str, int]]]] = None
     tool_call_end: SkipJsonSchema[Optional[str]] = None
     tool_call_schema: SkipJsonSchema[Optional[dict]] = tool_call_schema
+    tool_call_converter_unique_id: SkipJsonSchema[Optional[str]] = None
 
 
 class ChatCompletionResponse(BaseModel):

@@ -77,6 +77,12 @@ class PromptTemplate:
             if isinstance(template_module.tool_start_token, int):
                 template_metadata.tool_starts.append(template_module.tool_start_token)
 
+        if hasattr(template_module, "tool_call_converter_unique_id"):
+            if isinstance(template_module.tool_call_converter_unique_id, str):
+                template_metadata.tool_call_converter_unique_id.append(
+                    template_module.tool_call_converter_unique_id
+                )
+
         self.metadata = template_metadata
         return template_metadata
 
