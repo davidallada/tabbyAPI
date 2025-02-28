@@ -81,7 +81,8 @@ class ChatCompletionRequest(CommonCompletionRequest):
     tool_call_start: SkipJsonSchema[Optional[List[Union[str, int]]]] = None
     tool_call_end: SkipJsonSchema[Optional[str]] = None
     tool_call_schema: SkipJsonSchema[Optional[dict]] = tool_call_schema
-
+    tool_class_name: SkipJsonSchema[Optional[str]] = None
+    tool_class: SkipJsonSchema[Optional[str]] = None
 
 class ChatCompletionResponse(BaseModel):
     id: str = Field(default_factory=lambda: f"chatcmpl-{uuid4().hex}")
