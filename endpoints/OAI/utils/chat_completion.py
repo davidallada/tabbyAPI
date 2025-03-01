@@ -4,7 +4,7 @@ import asyncio
 import json
 import pathlib
 from asyncio import CancelledError
-from typing import List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from fastapi import HTTPException, Request
 from jinja2 import TemplateError
 from loguru import logger
@@ -18,6 +18,7 @@ from common.networking import (
     request_disconnect_loop,
 )
 from common.utils import unwrap
+from endpoints.OAI.function_handling.default_function_handler import DEFAULT_FUNCTION_HANDLER_CLASS, get_function_calling_class
 from endpoints.OAI.types.chat_completion import (
     ChatCompletionLogprobs,
     ChatCompletionLogprob,
@@ -33,10 +34,22 @@ from endpoints.OAI.utils.completion import _stream_collector
 from endpoints.OAI.types.tools import ToolCall
 
 
+def postprocess_tool_call(call_str: str) -> List[ToolCall]:
+    tool_calls = json.loads(call_str)
+    for tool_call in tool_calls:
+        tool_call["function"]["arguments"] = json.dumps(
+            tool_call["function"]["arguments"]
+        )
+    return [ToolCall(**tool_call) for tool_call in tool_calls]
+
+
 def _create_response(
-    request_id: str, generations: List[dict], model_name: Optional[str]
+    request_id: str, generations: List[dict], model_name: Optional[str], postprocess_tool_calls_func: Optional[Callable] = None
 ):
     """Create a chat completion response from the provided text."""
+
+    if not postprocess_tool_calls_func:
+        postprocess_tool_calls_func = postprocess_tool_call
 
     prompt_tokens = unwrap(generations[-1].get("prompt_tokens"), 0)
     completion_tokens = unwrap(generations[-1].get("generated_tokens"), 0)
@@ -49,7 +62,7 @@ def _create_response(
 
         tool_calls = generation["tool_calls"]
         if tool_calls:
-            message.tool_calls = postprocess_tool_call(tool_calls)
+            message.tool_calls = postprocess_tool_calls_func(tool_calls)
 
         logprob_response = None
 
@@ -74,9 +87,21 @@ def _create_response(
 
             logprob_response = ChatCompletionLogprobs(content=collected_token_probs)
 
+        # Grab the original finish_reason
+        finish_reason = generation.get("finish_reason")
+
+        # In the case of tool call use, we mark the finish_reason for the choice as
+        # "tool_calls". I check for truthy finish_reason because for some reason I
+        # remember something about streaming chunks having no finish reason until
+        # the chunk is done or something like that. Feel free to correct me.
+        # I am purposly leaving stop_str because I don't know the ramifications
+        # of removing, and I don't have time.
+        if message.tool_calls and finish_reason:
+            finish_reason = "tool_calls"
+
         choice = ChatCompletionRespChoice(
             index=index,
-            finish_reason=generation.get("finish_reason"),
+            finish_reason=finish_reason,
             stop_str=generation.get("stop_str"),
             message=message,
             logprobs=logprob_response,
@@ -103,9 +128,13 @@ def _create_stream_chunk(
     generation: Optional[dict] = None,
     model_name: Optional[str] = None,
     is_usage_chunk: bool = False,
+    postprocess_tool_calls_func: Optional[Callable] = None
 ):
     """Create a chat completion stream chunk from the provided text."""
 
+    if not postprocess_tool_calls_func:
+        postprocess_tool_calls_func = postprocess_tool_call
+    
     index = generation.get("index")
     choices = []
     usage_stats = None
@@ -120,18 +149,24 @@ def _create_stream_chunk(
             total_tokens=prompt_tokens + completion_tokens,
         )
     elif "finish_reason" in generation:
-        choice = ChatCompletionStreamChoice(
-            index=index,
-            finish_reason=generation.get("finish_reason"),
-        )
+        # Get the finish reason from the generation
+        finish_reason = generation.get("finish_reason")
+        choice = ChatCompletionStreamChoice(index=index, finish_reason=finish_reason)
 
         # lets check if we have tool calls since we are at the end of the generation
         if "tool_calls" in generation:
             tool_calls = generation["tool_calls"]
             message = ChatCompletionMessage(
-                tool_calls=postprocess_tool_call(tool_calls)
+                tool_calls=postprocess_tool_calls_func(tool_calls)
             )
             choice.delta = message
+
+            # In the case of tool call use, we mark the finish_reason for the choice as
+            # "tool_calls". I check for truthy finish_reason because for some reason I
+            # remember something about streaming chunks having no finish reason until
+            # the chunk is done or something like that. Feel free to correct me.
+            if finish_reason:
+                choice.finish_reason = "tool_calls"
 
         choices.append(choice)
 
@@ -176,6 +211,31 @@ def _create_stream_chunk(
 
     return chunk
 
+def tool_calls_to_tool_calls_json(message: ChatCompletionMessage) -> str:
+    """
+    message.tool_calls is of type List[ToolCall], so we cannot simply json.dumps it.
+    Im just going to do this quick and dirty, feel free to improve.
+    Args:
+        message (ChatCompletionMessage): The chat completion message to convert the tool
+            calls to json.
+    Returns:
+        str: JSON representation of the tool calls
+    """
+    if not message.tool_calls:
+        return ""
+
+    list_of_tool_call_dicts: List[Dict] = []
+
+    for tool_call_obj in message.tool_calls:
+        # ToolCall stores arguments as a json dumped string, so we need to json.loads it
+        # back to a dict
+        func_dict = json.loads(tool_call_obj.model_dump_json())
+        func_dict["function"]["arguments"] = json.loads(
+            func_dict.get("function", {}
+        ).get("arguments", "{}"))
+        list_of_tool_call_dicts.append(func_dict)
+
+    return json.dumps(list_of_tool_call_dicts, indent=2)
 
 async def _append_template_metadata(data: ChatCompletionRequest, template_vars: dict):
     """Adding metadata is a one-time process."""
@@ -197,6 +257,13 @@ async def _append_template_metadata(data: ChatCompletionRequest, template_vars: 
 
         # Append to stop strings to halt for a tool call generation
         data.stop.extend(template_metadata.tool_starts)
+    
+    if template_metadata.tool_class_name:
+        data.tool_class_name = template_metadata.tool_class_name
+
+    data.skip_bos_token = template_metadata.skip_bos_token
+    
+    data.tool_class = template_metadata.tool_class = get_function_calling_class(data.tool_class_name)
 
 
 async def format_messages_with_template(
@@ -204,8 +271,12 @@ async def format_messages_with_template(
     existing_template_vars: Optional[dict] = None,
     add_bos_token: bool = True,
     ban_eos_token: bool = False,
+    format_tool_call_for_prompt: Callable = tool_calls_to_tool_calls_json
 ):
     """Barebones function to format chat completion messages into a prompt."""
+
+    if format_tool_call_for_prompt is None:
+        format_tool_call_for_prompt = tool_calls_to_tool_calls_json
 
     template_vars = unwrap(existing_template_vars, {})
     mm_embeddings = MultimodalEmbeddingWrapper() if model.container.use_vision else None
@@ -224,12 +295,11 @@ async def format_messages_with_template(
             message.content = concatenated_content
 
         if message.tool_calls:
-            message.tool_calls_json = json.dumps(message.tool_calls, indent=2)
+            message.tool_calls_json = format_tool_call_for_prompt(message)
 
     special_tokens_dict = model.container.get_special_tokens(
         add_bos_token, ban_eos_token
     )
-
     template_vars.update({"messages": messages, **special_tokens_dict})
 
     prompt = await model.container.prompt_template.render(template_vars)
@@ -243,31 +313,35 @@ async def apply_chat_template(
     Compile the prompt and get any additional stop strings from the template.
     Template stop strings can be overriden by sampler overrides if force is true.
     """
-
     try:
-        data.template_vars.update(
-            {
-                "add_generation_prompt": data.add_generation_prompt,
-                "tools_json": json.dumps(data.model_dump()["tools"], indent=2),
-                "functions_json": json.dumps(data.functions, indent=2),
-                "tool_precursor": tool_precursor,
-            }
-        )
+        data.template_vars["tool_precursor"] = tool_precursor
+        data.add_bos_token = False if data.skip_bos_token else data.add_bos_token
+
+        if not data.tool_class:
+            data.tool_class = get_function_calling_class(data.tool_class_name)
+
+        _ = data.tool_class.format_template_vars(data)
+
+        tool_call_format_func = data.tool_class.format_tool_call_for_prompt if data.tool_class else None
 
         prompt, mm_embeddings, template_vars = await format_messages_with_template(
-            data.messages, data.template_vars, data.add_bos_token, data.ban_eos_token
+            data.messages, data.template_vars, data.add_bos_token, data.ban_eos_token, tool_call_format_func
         )
 
         # Append response prefix if present
         if data.response_prefix:
             if data.add_generation_prompt:
-                prompt += data.response_prefix
+                if not prompt.endswith(data.response_prefix):
+                    prompt += data.response_prefix
             else:
                 logger.warning(
                     "Could not add response prefix because "
                     "add_generation_prompt is False"
                 )
 
+        if data.skip_bos_token:
+            template_vars["bos_token"] = ""
+    
         # Removes the starting BOS token if present
         # This is to prevent add_bos_token from adding multiple bos tokens
         bos_token = template_vars.get("bos_token")
@@ -357,7 +431,7 @@ async def stream_generate_chat_completion(
                 raise generation
 
             response = _create_stream_chunk(
-                request.state.id, generation, model_path.name
+                request.state.id, generation, model_path.name, postprocess_tool_calls_func=data.tool_class.postprocess_tool_call if data.tool_class else None
             )
             yield response.model_dump_json()
 
@@ -370,6 +444,7 @@ async def stream_generate_chat_completion(
                         generation,
                         model_path.name,
                         is_usage_chunk=True,
+                        postprocess_tool_calls_func=data.tool_class.postprocess_tool_call if data.tool_class else None
                     )
                     yield usage_chunk.model_dump_json()
 
@@ -419,7 +494,7 @@ async def generate_chat_completion(
         if data.tool_call_start:
             generations = await generate_tool_calls(data, generations, request)
 
-        response = _create_response(request.state.id, generations, model_path.name)
+        response = _create_response(request.state.id, generations, model_path.name, data.tool_class.postprocess_tool_call if data.tool_class else None)
 
         logger.info(f"Finished chat completion request {request.state.id}")
 
@@ -482,12 +557,3 @@ async def generate_tool_calls(
         generations[gen_idx]["tool_calls"] = tool_calls[outer_idx]["text"]
 
     return generations
-
-
-def postprocess_tool_call(call_str: str) -> List[ToolCall]:
-    tool_calls = json.loads(call_str)
-    for tool_call in tool_calls:
-        tool_call["function"]["arguments"] = json.dumps(
-            tool_call["function"]["arguments"]
-        )
-    return [ToolCall(**tool_call) for tool_call in tool_calls]

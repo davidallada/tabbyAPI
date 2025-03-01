@@ -1,3 +1,6 @@
+from loguru import logger
+import json
+import re
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette import EventSourceResponse
@@ -8,6 +11,7 @@ from common.auth import check_api_key
 from common.model import check_embeddings_container, check_model_container
 from common.networking import handle_request_error, run_with_request_disconnect
 from common.tabby_config import config
+from endpoints.OAI.function_handling.default_function_handler import get_function_calling_class
 from endpoints.OAI.types.completion import CompletionRequest, CompletionResponse
 from endpoints.OAI.types.chat_completion import (
     ChatCompletionRequest,
@@ -94,6 +98,27 @@ async def completion_request(
         return response
 
 
+# Function to extract variables and values from {%- set %} tags
+def extract_set_variables(raw_template: str):
+    # Regular expression to match {%- set variable_name = value -%} tags
+    set_pattern = r"{%?-?\s*set\s+(\w+)\s*=\s*([^%]+)?\s*[-]+[%]+}"
+
+    # Find all matches in the raw template
+    matches = re.findall(set_pattern, raw_template)
+
+    # Convert the value string to Python data using json.loads
+    variables = {}
+    for var, value in matches:
+        try:
+            # Parse the value using json.loads() to handle different types
+            variables[var] = json.loads(value)
+        except json.JSONDecodeError:
+            # If JSON parsing fails, it's treated as a string
+            variables[var] = value.strip('"')
+    
+    return variables
+
+
 # Chat completions endpoint
 @router.post(
     "/v1/chat/completions",
@@ -120,6 +145,16 @@ async def chat_completion_request(
         ).error.message
 
         raise HTTPException(422, error_message)
+    else:
+        # We want to try to get some of the config options from the jinja template before rendering anything
+        try:
+            static_jinja_vars: dict = extract_set_variables(model.container.prompt_template.raw_template)
+            data.tool_class_name = static_jinja_vars.get("tool_class_name")
+            data.tool_class = get_function_calling_class(data.tool_class_name)
+            data.skip_bos_token = static_jinja_vars.get("skip_bos_token", False)
+        except Exception as e:
+            logger.exception(e)
+        
 
     model_path = model.container.model_dir
 

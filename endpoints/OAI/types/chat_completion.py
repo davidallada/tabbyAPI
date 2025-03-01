@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from pydantic.json_schema import SkipJsonSchema
 from time import time
-from typing import Literal, Union, List, Optional, Dict
+from typing import Any, Literal, Union, List, Optional, Dict
 from uuid import uuid4
 
 from endpoints.OAI.types.common import UsageStats, CommonCompletionRequest
@@ -81,7 +81,9 @@ class ChatCompletionRequest(CommonCompletionRequest):
     tool_call_start: SkipJsonSchema[Optional[List[Union[str, int]]]] = None
     tool_call_end: SkipJsonSchema[Optional[str]] = None
     tool_call_schema: SkipJsonSchema[Optional[dict]] = tool_call_schema
-
+    tool_class_name: SkipJsonSchema[Optional[str]] = None
+    tool_class: SkipJsonSchema[Optional[Any]] = None
+    skip_bos_token: SkipJsonSchema[Optional[bool]] = False
 
 class ChatCompletionResponse(BaseModel):
     id: str = Field(default_factory=lambda: f"chatcmpl-{uuid4().hex}")
