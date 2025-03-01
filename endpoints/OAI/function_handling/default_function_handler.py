@@ -2,6 +2,8 @@ from typing import Any, Dict, List
 import datetime
 import json
 
+from endpoints.OAI.types.tools import ToolCall
+
 
 class FunctionCallingBaseClass:
     """
@@ -73,6 +75,16 @@ class FunctionCallingBaseClass:
             list_of_tool_call_dicts.append(func_dict)
 
         return json.dumps(list_of_tool_call_dicts, indent=2)
+    
+    @classmethod
+    def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
+        tool_calls = json.loads(call_str)
+        for tool_call in tool_calls:
+            tool_call["function"]["arguments"] = json.dumps(
+                tool_call["function"]["arguments"]
+            )
+        return [ToolCall(**tool_call) for tool_call in tool_calls]
+
 
     @classmethod
     def get_timestamp(cls):
