@@ -1,6 +1,7 @@
-from typing import Dict, List
+from typing import Any, Dict, List
 import datetime
 import json
+
 
 class FunctionCallingBaseClass:
     """
@@ -35,7 +36,27 @@ class FunctionCallingBaseClass:
             )
 
         return tool_calls
+    
+    @classmethod
+    def format_template_vars(cls, data: Any):
+        data.template_vars.update(
+            {
+                "add_generation_prompt": data.add_generation_prompt,
+                "tools_json": json.dumps(data.model_dump()["tools"], indent=2),
+                "functions_json": json.dumps(data.functions, indent=2),
+            }
+        )
 
     @classmethod
     def get_timestamp(cls):
         return datetime.datetime.now().timestamp()
+    
+DEFAULT_FUNCTION_HANDLER_CLASS = FunctionCallingBaseClass
+
+def get_function_calling_class(tool_class_name: str):
+    if not tool_class_name:
+        return DEFAULT_FUNCTION_HANDLER_CLASS
+    
+    if tool_class_name == DEFAULT_FUNCTION_HANDLER_CLASS.__name__:
+        return DEFAULT_FUNCTION_HANDLER_CLASS
+    return FunctionCallingBaseClass._registry[tool_class_name]

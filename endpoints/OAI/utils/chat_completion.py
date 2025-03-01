@@ -18,6 +18,7 @@ from common.networking import (
     request_disconnect_loop,
 )
 from common.utils import unwrap
+from endpoints.OAI.function_handling.default_function_handler import FunctionCallingBaseClass, get_function_calling_class
 from endpoints.OAI.types.chat_completion import (
     ChatCompletionLogprobs,
     ChatCompletionLogprob,
@@ -240,6 +241,11 @@ async def _append_template_metadata(data: ChatCompletionRequest, template_vars: 
 
         # Append to stop strings to halt for a tool call generation
         data.stop.extend(template_metadata.tool_starts)
+    
+    if template_metadata.tool_class_name:
+        data.tool_class_name = template_metadata.tool_class_name
+    
+    data.tool_class = template_metadata.tool_class = get_function_calling_class(data.tool_class_name)
 
 
 async def format_messages_with_template(
@@ -286,16 +292,11 @@ async def apply_chat_template(
     Compile the prompt and get any additional stop strings from the template.
     Template stop strings can be overriden by sampler overrides if force is true.
     """
-
     try:
-        data.template_vars.update(
-            {
-                "add_generation_prompt": data.add_generation_prompt,
-                "tools_json": json.dumps(data.model_dump()["tools"], indent=2),
-                "functions_json": json.dumps(data.functions, indent=2),
-                "tool_precursor": tool_precursor,
-            }
-        )
+        data.template_vars["tool_precursor"] = tool_precursor
+        if not data.tool_class:
+            data.tool_class = FunctionCallingBaseClass
+        k = data.tool_class.format_template_vars(data)
 
         prompt, mm_embeddings, template_vars = await format_messages_with_template(
             data.messages, data.template_vars, data.add_bos_token, data.ban_eos_token

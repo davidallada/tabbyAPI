@@ -4,7 +4,7 @@ import aiofiles
 import json
 import pathlib
 from importlib.metadata import version as package_version
-from typing import List, Optional
+from typing import Any, List, Optional
 from jinja2 import Template, TemplateError
 from jinja2.ext import loopcontrols
 from jinja2.sandbox import ImmutableSandboxedEnvironment
@@ -27,6 +27,8 @@ class TemplateMetadata:
 
     stop_strings: List[str] = []
     tool_starts: List[str] = []
+    tool_class_name: str = None
+    tool_class: Any = None
 
 
 class PromptTemplate:
@@ -77,11 +79,10 @@ class PromptTemplate:
             if isinstance(template_module.tool_start_token, int):
                 template_metadata.tool_starts.append(template_module.tool_start_token)
 
+        template_metadata.tool_class_name = None
         if hasattr(template_module, "tool_class_name"):
-            if isinstance(template_module.tool_class, str):
-                template_metadata.tool_class_name.append(
-                    template_module.tool_class
-                )
+            if isinstance(template_module.tool_class_name, str):
+                template_metadata.tool_class_name = template_module.tool_class_name
 
         self.metadata = template_metadata
         return template_metadata
