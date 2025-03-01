@@ -48,6 +48,33 @@ class FunctionCallingBaseClass:
         )
 
     @classmethod
+    def format_tool_call_for_prompt(cls, message: Any) -> str:
+        """
+        message.tool_calls is of type List[ToolCall], so we cannot simply json.dumps it.
+        Im just going to do this quick and dirty, feel free to improve.
+        Args:
+            message (ChatCompletionMessage): The chat completion message to convert the tool
+                calls to json.
+        Returns:
+            str: JSON representation of the tool calls
+        """
+        if not message.tool_calls:
+            return ""
+
+        list_of_tool_call_dicts: List[Dict] = []
+
+        for tool_call_obj in message.tool_calls:
+            # ToolCall stores arguments as a json dumped string, so we need to json.loads it
+            # back to a dict
+            func_dict = json.loads(tool_call_obj.model_dump_json())
+            func_dict["function"]["arguments"] = json.loads(
+                func_dict.get("function", {}
+            ).get("arguments", "{}"))
+            list_of_tool_call_dicts.append(func_dict)
+
+        return json.dumps(list_of_tool_call_dicts, indent=2)
+
+    @classmethod
     def get_timestamp(cls):
         return datetime.datetime.now().timestamp()
     

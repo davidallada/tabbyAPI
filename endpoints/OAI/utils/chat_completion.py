@@ -4,7 +4,7 @@ import asyncio
 import json
 import pathlib
 from asyncio import CancelledError
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from fastapi import HTTPException, Request
 from jinja2 import TemplateError
 from loguru import logger
@@ -253,8 +253,12 @@ async def format_messages_with_template(
     existing_template_vars: Optional[dict] = None,
     add_bos_token: bool = True,
     ban_eos_token: bool = False,
+    format_tool_call_for_prompt: Callable = tool_calls_to_tool_calls_json
 ):
     """Barebones function to format chat completion messages into a prompt."""
+
+    if format_tool_call_for_prompt is None:
+        format_tool_call_for_prompt = tool_calls_to_tool_calls_json
 
     template_vars = unwrap(existing_template_vars, {})
     mm_embeddings = MultimodalEmbeddingWrapper() if model.container.use_vision else None
@@ -273,7 +277,7 @@ async def format_messages_with_template(
             message.content = concatenated_content
 
         if message.tool_calls:
-            message.tool_calls_json = tool_calls_to_tool_calls_json(message)
+            message.tool_calls_json = format_tool_call_for_prompt(message)
 
     special_tokens_dict = model.container.get_special_tokens(
         add_bos_token, ban_eos_token
@@ -296,10 +300,12 @@ async def apply_chat_template(
         data.template_vars["tool_precursor"] = tool_precursor
         if not data.tool_class:
             data.tool_class = FunctionCallingBaseClass
-        k = data.tool_class.format_template_vars(data)
+        _ = data.tool_class.format_template_vars(data)
+
+        tool_call_format_func = data.tool_class.format_tool_call_for_prompt if data.tool_class else None
 
         prompt, mm_embeddings, template_vars = await format_messages_with_template(
-            data.messages, data.template_vars, data.add_bos_token, data.ban_eos_token
+            data.messages, data.template_vars, data.add_bos_token, data.ban_eos_token, tool_call_format_func
         )
 
         # Append response prefix if present
