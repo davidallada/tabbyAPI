@@ -37,8 +37,6 @@ class FunctionCallingBaseClass:
                 tool_call["function"]["arguments"]
             )
 
-        logger.debug(f"Default_Tool: Convert Tool Call String: {tool_calls}\n\n\n")
-
         return tool_calls
     
     @classmethod
@@ -52,7 +50,6 @@ class FunctionCallingBaseClass:
                 "tool_class_name": data.template_vars.get("tool_class_name", data.tool_class_name),
             }
         )
-        logger.debug(f"{cls}Default_Tool: Format Template Vars: {data.template_vars}\n\n{data}\n\n\n")
 
     @classmethod
     def format_tool_call_for_prompt(cls, message: Any) -> str:
@@ -80,14 +77,12 @@ class FunctionCallingBaseClass:
             list_of_tool_call_dicts.append(func_dict)
 
         json_str = json.dumps(list_of_tool_call_dicts, indent=2)
-        logger.debug(f"Default_Tool: Format Tool Call {json_str}")
         return json_str
     
     @classmethod
     def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
         tool_calls = json.loads(call_str)
         tool_call_list = [ToolCall(**tool_call) for tool_call in tool_calls]
-        logger.debug(f"Default_Tool: Post Process Tool Call {tool_call_list}")
         return tool_call_list
 
     @classmethod

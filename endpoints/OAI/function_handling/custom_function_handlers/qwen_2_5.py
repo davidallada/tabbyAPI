@@ -21,12 +21,9 @@ class Qwen2_5_FunctionHandler(FunctionCallingBaseClass):
                 "tools": [t.model_dump() for t in data.tools],
             }
         )
-        logger.debug(f"Default_Tool: Format Template Vars: {data.template_vars}\n\n{data}\n\n\n")
 
     @classmethod
     def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
-        logger.debug(f"Qwen postprocess_tool_call: {call_str}")
         tool_calls = json.loads(call_str)
         tool_call_list = [ToolCall(**tool_call) for tool_call in tool_calls]
-        logger.debug(f"Default_Tool: Post Process Tool Call {tool_call_list}")
         return tool_call_list
