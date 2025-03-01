@@ -50,7 +50,7 @@ class Tool(BaseModel):
     arguments: str
 
     # We can also store the full dictionary version here
-    arguments_dict: Optional[Dict[Any, Any]] = None
+    arguments_dict: SkipJsonSchema[Optional[Dict[Any, Any]]] = None
 
     @model_validator(mode="before")
     @classmethod
