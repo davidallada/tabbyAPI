@@ -1,5 +1,6 @@
 from loguru import logger
-
+import json
+import re
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette import EventSourceResponse
@@ -95,8 +96,7 @@ async def completion_request(
             disconnect_message=f"Completion {request.state.id} cancelled by user.",
         )
         return response
-import re
-import json
+
 
 # Function to extract variables and values from {%- set %} tags
 def extract_set_variables(raw_template: str):
@@ -117,6 +117,7 @@ def extract_set_variables(raw_template: str):
             variables[var] = value.strip('"')
     
     return variables
+
 
 # Chat completions endpoint
 @router.post(

@@ -300,7 +300,6 @@ async def format_messages_with_template(
     special_tokens_dict = model.container.get_special_tokens(
         add_bos_token, ban_eos_token
     )
-    logger.info(f"TOKENSsss: {existing_template_vars}")
     template_vars.update({"messages": messages, **special_tokens_dict})
 
     prompt = await model.container.prompt_template.render(template_vars)
@@ -317,8 +316,9 @@ async def apply_chat_template(
     try:
         data.template_vars["tool_precursor"] = tool_precursor
         data.add_bos_token = False if data.skip_bos_token else data.add_bos_token
+
         if not data.tool_class:
-            data.tool_class = DEFAULT_FUNCTION_HANDLER_CLASS
+            data.tool_class = get_function_calling_class(data.tool_class_name)
 
         _ = data.tool_class.format_template_vars(data)
 
@@ -532,14 +532,12 @@ async def generate_tool_calls(
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, gen["text"]
                 )
-                logger.info(f"PreToolPrompt1: SSSTART:\n\n{pre_tool_prompt}\n\nENDDD")
             elif current_generations is not None:
                 # streaming, we wont have text in the generation,
                 # we'll have to use the current_generations
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, current_generations
                 )
-                logger.info(f"PreToolPrompt2: SSSTART:\n\n{pre_tool_prompt}\n\nENDDD")
 
             gen_tasks.append(
                 asyncio.create_task(

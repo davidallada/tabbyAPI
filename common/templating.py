@@ -62,7 +62,7 @@ class PromptTemplate:
         template_metadata = TemplateMetadata()
 
         template_module = await self.template.make_module_async(template_vars)
-        logger.info(f"TEMPLATE_VARS: {template_vars}")
+
         if hasattr(template_module, "stop_strings"):
             if isinstance(template_module.stop_strings, list):
                 template_metadata.stop_strings += template_module.stop_strings
