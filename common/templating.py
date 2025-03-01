@@ -29,6 +29,7 @@ class TemplateMetadata:
     tool_starts: List[str] = []
     tool_class_name: str = None
     tool_class: Any = None
+    skip_bos_token: bool = False
 
 
 class PromptTemplate:
@@ -61,7 +62,7 @@ class PromptTemplate:
         template_metadata = TemplateMetadata()
 
         template_module = await self.template.make_module_async(template_vars)
-
+        logger.info(f"TEMPLATE_VARS: {template_vars}")
         if hasattr(template_module, "stop_strings"):
             if isinstance(template_module.stop_strings, list):
                 template_metadata.stop_strings += template_module.stop_strings
@@ -83,6 +84,9 @@ class PromptTemplate:
         if hasattr(template_module, "tool_class_name"):
             if isinstance(template_module.tool_class_name, str):
                 template_metadata.tool_class_name = template_module.tool_class_name
+
+        if hasattr(template_module, "skip_bos_token"):
+            template_metadata.skip_bos_token = template_module.skip_bos_token
 
         self.metadata = template_metadata
         return template_metadata

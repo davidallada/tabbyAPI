@@ -61,17 +61,18 @@ class Tool(BaseModel):
         work with in Python. So when we load from an OAI request, arguments is set, and we set arguments_dict to json.loads of arguments, and visa versa.
         """
         arguments = values.get("arguments")
-        arguments_dict = values.get("arguments_dict")
-
-        if arguments_dict is not None:
-            # If arguments_dict is provided, serialize it to arguments
-            values["arguments"] = json.dumps(arguments_dict)
-        elif arguments is not None:
-            # If arguments is provided, deserialize it to arguments_dict
-            try:
-                values["arguments_dict"] = json.loads(arguments)
-            except json.JSONDecodeError:
-                raise ValueError("Invalid JSON string in `arguments` field")
+        if arguments is not None:
+            if isinstance(arguments, str):
+                # If arguments is provided, deserialize it to arguments_dict
+                try:
+                    values["arguments_dict"] = json.loads(arguments)
+                except json.JSONDecodeError:
+                    raise ValueError("Invalid JSON string in `arguments` field")
+            elif isinstance(arguments, dict):
+                values["arguments_dict"] = arguments
+                values["arguments"] = json.dumps(arguments)
+            else:
+                raise Exception(f"Tool.arguments encountered unexpected type, expected str or dict, but got: {type(arguments)}")
 
         return values
 

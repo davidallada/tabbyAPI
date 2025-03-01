@@ -2,6 +2,7 @@ import json
 import re
 from typing import Dict, List
 from endpoints.OAI.function_handling.default_function_handler import FunctionCallingBaseClass
+from endpoints.OAI.types.tools import ToolCall
 
 
 class Llama3_1_FunctionHanlder(FunctionCallingBaseClass):
@@ -27,14 +28,14 @@ class Llama3_1_FunctionHanlder(FunctionCallingBaseClass):
 
             assert func_name is not None and arguments_str is not None, f"Unable to extract func_name and arguments_str from {tool_call_input}"
             tool_call_list = [
-                {
+                ToolCall(**{
                     "id": f"{func_name}_{cls.get_timestamp()}",
                     "function": {
                         "name": func_name,
                         "arguments": json.loads(arguments_str)
                     },
                     "type": "function"
-                }
+                })
             ]
 
             return tool_call_list

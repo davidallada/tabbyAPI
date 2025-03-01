@@ -18,7 +18,7 @@ from common.networking import (
     request_disconnect_loop,
 )
 from common.utils import unwrap
-from endpoints.OAI.function_handling.default_function_handler import FunctionCallingBaseClass, get_function_calling_class
+from endpoints.OAI.function_handling.default_function_handler import DEFAULT_FUNCTION_HANDLER_CLASS, get_function_calling_class
 from endpoints.OAI.types.chat_completion import (
     ChatCompletionLogprobs,
     ChatCompletionLogprob,
@@ -260,6 +260,8 @@ async def _append_template_metadata(data: ChatCompletionRequest, template_vars: 
     
     if template_metadata.tool_class_name:
         data.tool_class_name = template_metadata.tool_class_name
+
+    data.skip_bos_token = template_metadata.skip_bos_token
     
     data.tool_class = template_metadata.tool_class = get_function_calling_class(data.tool_class_name)
 
@@ -298,7 +300,7 @@ async def format_messages_with_template(
     special_tokens_dict = model.container.get_special_tokens(
         add_bos_token, ban_eos_token
     )
-
+    logger.info(f"TOKENSsss: {existing_template_vars}")
     template_vars.update({"messages": messages, **special_tokens_dict})
 
     prompt = await model.container.prompt_template.render(template_vars)
@@ -314,8 +316,10 @@ async def apply_chat_template(
     """
     try:
         data.template_vars["tool_precursor"] = tool_precursor
+        data.add_bos_token = False if data.skip_bos_token else data.add_bos_token
         if not data.tool_class:
-            data.tool_class = FunctionCallingBaseClass
+            data.tool_class = DEFAULT_FUNCTION_HANDLER_CLASS
+
         _ = data.tool_class.format_template_vars(data)
 
         tool_call_format_func = data.tool_class.format_tool_call_for_prompt if data.tool_class else None
@@ -327,13 +331,17 @@ async def apply_chat_template(
         # Append response prefix if present
         if data.response_prefix:
             if data.add_generation_prompt:
-                prompt += data.response_prefix
+                if not prompt.endswith(data.response_prefix):
+                    prompt += data.response_prefix
             else:
                 logger.warning(
                     "Could not add response prefix because "
                     "add_generation_prompt is False"
                 )
 
+        if data.skip_bos_token:
+            template_vars["bos_token"] = ""
+    
         # Removes the starting BOS token if present
         # This is to prevent add_bos_token from adding multiple bos tokens
         bos_token = template_vars.get("bos_token")
@@ -423,7 +431,7 @@ async def stream_generate_chat_completion(
                 raise generation
 
             response = _create_stream_chunk(
-                request.state.id, generation, model_path.name, postprocess_tool_calls_func=data.tool_call.postprocess_tool_call if data.tool_call else None
+                request.state.id, generation, model_path.name, postprocess_tool_calls_func=data.tool_class.postprocess_tool_call if data.tool_class else None
             )
             yield response.model_dump_json()
 
@@ -436,7 +444,7 @@ async def stream_generate_chat_completion(
                         generation,
                         model_path.name,
                         is_usage_chunk=True,
-                        postprocess_tool_calls_func=data.tool_call.postprocess_tool_call if data.tool_call else None
+                        postprocess_tool_calls_func=data.tool_class.postprocess_tool_call if data.tool_class else None
                     )
                     yield usage_chunk.model_dump_json()
 
@@ -524,12 +532,14 @@ async def generate_tool_calls(
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, gen["text"]
                 )
+                logger.info(f"PreToolPrompt1: SSSTART:\n\n{pre_tool_prompt}\n\nENDDD")
             elif current_generations is not None:
                 # streaming, we wont have text in the generation,
                 # we'll have to use the current_generations
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, current_generations
                 )
+                logger.info(f"PreToolPrompt2: SSSTART:\n\n{pre_tool_prompt}\n\nENDDD")
 
             gen_tasks.append(
                 asyncio.create_task(

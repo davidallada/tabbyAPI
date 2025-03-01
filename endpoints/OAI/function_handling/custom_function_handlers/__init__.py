@@ -1,14 +1,9 @@
-import importlib
 import pkgutil
+import importlib
 
-from endpoints.OAI.function_handling.default_function_handler import FunctionCallingBaseClass
+# Get the package name dynamically
+package_name = __name__
 
-# Path to the Foo directory
-package_name = "endpoints.OAI.function_handling.custom_function_handlers"
-
-# Import all modules in Foo
-for _, module_name, _ in pkgutil.iter_modules([package_name]):
-    _ = importlib.import_module(f"{package_name}.{module_name}")
-
-# Get all subclasses of Base
-subclasses = {cls.__name__: cls for cls in FunctionCallingBaseClass.__subclasses__()}
+# Import all modules inside this package
+for _, module_name, _ in pkgutil.iter_modules(__path__):
+    importlib.import_module(f"{package_name}.{module_name}")

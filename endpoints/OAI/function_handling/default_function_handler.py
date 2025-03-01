@@ -1,9 +1,9 @@
 from typing import Any, Dict, List
 import datetime
 import json
+from loguru import logger
 
 from endpoints.OAI.types.tools import ToolCall
-
 
 class FunctionCallingBaseClass:
     """
@@ -19,7 +19,7 @@ class FunctionCallingBaseClass:
     # Called when a subclass of Vehicle is created
     def __init_subclass__(cls, *args, **kwargs):
         super().__init_subclass__(*args, **kwargs)
-        cls._registry[cls.__name__] = cls
+        FunctionCallingBaseClass._registry[cls.__name__] = cls
 
     @classmethod
     def convert_tool_call_str(cls, tool_call_input: str) -> List[Dict]:
@@ -37,6 +37,8 @@ class FunctionCallingBaseClass:
                 tool_call["function"]["arguments"]
             )
 
+        logger.debug(f"Default_Tool: Convert Tool Call String: {tool_calls}\n\n\n")
+
         return tool_calls
     
     @classmethod
@@ -46,8 +48,11 @@ class FunctionCallingBaseClass:
                 "add_generation_prompt": data.add_generation_prompt,
                 "tools_json": json.dumps(data.model_dump()["tools"], indent=2),
                 "functions_json": json.dumps(data.functions, indent=2),
+                "skip_bos_token": data.template_vars.get("skip_bos_token", data.skip_bos_token),
+                "tool_class_name": data.template_vars.get("tool_class_name", data.tool_class_name),
             }
         )
+        logger.debug(f"{cls}Default_Tool: Format Template Vars: {data.template_vars}\n\n{data}\n\n\n")
 
     @classmethod
     def format_tool_call_for_prompt(cls, message: Any) -> str:
@@ -74,17 +79,16 @@ class FunctionCallingBaseClass:
             ).get("arguments", "{}"))
             list_of_tool_call_dicts.append(func_dict)
 
-        return json.dumps(list_of_tool_call_dicts, indent=2)
+        json_str = json.dumps(list_of_tool_call_dicts, indent=2)
+        logger.debug(f"Default_Tool: Format Tool Call {json_str}")
+        return json_str
     
     @classmethod
     def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
         tool_calls = json.loads(call_str)
-        for tool_call in tool_calls:
-            tool_call["function"]["arguments"] = json.dumps(
-                tool_call["function"]["arguments"]
-            )
-        return [ToolCall(**tool_call) for tool_call in tool_calls]
-
+        tool_call_list = [ToolCall(**tool_call) for tool_call in tool_calls]
+        logger.debug(f"Default_Tool: Post Process Tool Call {tool_call_list}")
+        return tool_call_list
 
     @classmethod
     def get_timestamp(cls):
@@ -95,7 +99,9 @@ DEFAULT_FUNCTION_HANDLER_CLASS = FunctionCallingBaseClass
 def get_function_calling_class(tool_class_name: str):
     if not tool_class_name:
         return DEFAULT_FUNCTION_HANDLER_CLASS
-    
+    logger.info(f"FUNC_CALLING_CLASS: {FunctionCallingBaseClass._registry}")
     if tool_class_name == DEFAULT_FUNCTION_HANDLER_CLASS.__name__:
         return DEFAULT_FUNCTION_HANDLER_CLASS
     return FunctionCallingBaseClass._registry[tool_class_name]
+
+from endpoints.OAI.function_handling.custom_function_handlers import *
