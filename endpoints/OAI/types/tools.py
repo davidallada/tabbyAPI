@@ -1,30 +1,94 @@
 from pydantic import BaseModel, Field, model_validator
 from typing import Any, Dict, Literal, Optional
 from pydantic.json_schema import SkipJsonSchema
+from loguru import logger
+
 import json
+# tool_call_schema = {
+#     "$schema": "http://json-schema.org/draft-07/schema#",
+#     "type": "array",
+#     "items": {
+#         "type": "object",
+#         "properties": {
+#             "id": {"type": "string"},
+#             "function": {
+#                 "type": "object",
+#                 "properties": {
+#                     "name": {"type": "string"},
+#                     "arguments": {
+#                         # Converted to OAI's string in post process
+#                         "type": "object"
+#                     },
+#                 },
+#                 "required": ["name", "arguments"],
+#             },
+#             "type": {"type": "string", "enum": ["function"]},
+#         },
+#         "required": ["id", "function", "type"],
+#     },
+# }
+
 tool_call_schema = {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "array",
     "items": {
         "type": "object",
         "properties": {
-            "id": {"type": "string"},
-            "function": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "arguments": {
-                        # Converted to OAI's string in post process
-                        "type": "object"
-                    },
-                },
-                "required": ["name", "arguments"],
+            "name": {"type": "string"},
+            "arguments": {
+                # Converted to OAI's string in post process
+                "type": "object"
             },
-            "type": {"type": "string", "enum": ["function"]},
         },
-        "required": ["id", "function", "type"],
+        "required": ["name", "arguments"],
     },
 }
+
+
+
+def generate_json_schema(tools):
+    # Extract function names for the 'enum' of 'name'
+    function_names = [tool['function']['name'] for tool in tools]
+
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "enum": function_names  # Set 'enum' to the list of function names
+                },
+                "arguments": {
+                    "type": "object"
+                }
+            },
+            "required": ["name", "arguments"],
+            "allOf": []
+        }
+    }
+
+    # Add conditional schemas
+    for tool in tools:
+        function_name = tool['function']['name']
+        function_schema = tool['function']['parameters']
+
+        # Modify schema directly in the 'then' block
+        schema['items']['allOf'].append({
+            "if": {
+                "properties": {
+                    "name": {"const": function_name}
+                }
+            },
+            "then": {
+                "properties": {
+                    "arguments": function_schema  # Directly set the schema instead of referencing it
+                }
+            }
+        })
+
+    return schema
 
 
 class Function(BaseModel):

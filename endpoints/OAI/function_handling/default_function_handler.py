@@ -82,12 +82,34 @@ class FunctionCallingBaseClass:
     @classmethod
     def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
         tool_calls = json.loads(call_str)
-        tool_call_list = [ToolCall(**tool_call) for tool_call in tool_calls]
-        return tool_call_list
+        logger.debug(f"_LOG: in postprocess_tool_call: {call_str=}")  # DEBUG:REMOVE
+        if isinstance(tool_calls, list):
+            tool_call_list = []
+            for tool_call in tool_calls:
+                tool_call_list.append(
+                    ToolCall(
+                        **{
+                            "function": tool_call,
+                            "id": f"{tool_call['name']}_{cls.get_timestamp()}",
+                            "type": "function"
+                        }
+                    )
+                )
+            return tool_call_list
+        else:
+            return [
+                ToolCall(
+                    **{
+                        "function": tool_calls,
+                        "id": f"{tool_calls['name']}_{cls.get_timestamp()}",
+                        "type": "function"
+                    }
+                )
+            ]
 
     @classmethod
     def get_timestamp(cls):
-        return datetime.datetime.now().timestamp()
+        return datetime.datetime.now().timestamp() * 1000
     
 DEFAULT_FUNCTION_HANDLER_CLASS = FunctionCallingBaseClass
 

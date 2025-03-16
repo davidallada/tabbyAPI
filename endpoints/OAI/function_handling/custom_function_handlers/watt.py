@@ -7,7 +7,7 @@ from loguru import logger
 from endpoints.OAI.types.tools import ToolCall
 
 
-class Qwen2_5_FunctionHandler(FunctionCallingBaseClass):
+class WattFunctionHandler(FunctionCallingBaseClass):
     @classmethod
     def format_template_vars(cls, data: Any):
         data.template_vars.update(
@@ -18,7 +18,8 @@ class Qwen2_5_FunctionHandler(FunctionCallingBaseClass):
                 "skip_bos_token": data.template_vars.get("skip_bos_token", data.skip_bos_token),
                 "tool_class_name": data.template_vars.get("tool_class_name", data.tool_class_name),
                 # Qwen 2.5 Expects "tools" to be a list of tool dicts that it will call | tojson on each dict
-                "tools": [t.model_dump() for t in data.tools],
+                "custom_tools": [t.model_dump() for t in data.tools],
+                "tools_in_user_message": False
             }
         )
 
