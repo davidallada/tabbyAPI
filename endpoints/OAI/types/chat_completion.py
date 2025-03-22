@@ -94,9 +94,9 @@ class ChatCompletionRequest(CommonCompletionRequest):
         """
         tools = values.get("tools")
         if tools:
-            logger.debug(f"_LOG: TOOLS: {tools=}")
+            # logger.debug(f"_LOG: TOOLS: {tools=}")
             values["tool_call_schema"] = generate_json_schema(tools)
-            logger.debug(f"_LOG: TOOLS: {values['tool_call_schema']=}")
+            # logger.debug(f"_LOG: TOOLS: {values['tool_call_schema']=}")
 
         return values
 

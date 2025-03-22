@@ -63,7 +63,7 @@ def _create_response(
         tool_calls = generation["tool_calls"]
         if tool_calls:
             message.tool_calls = postprocess_tool_calls_func(tool_calls)
-        logger.debug(f"_LOG: create_reponse: {message.tool_calls=}")  # DEBUG:REMOVE
+        # logger.debug(f"_LOG: create_reponse: {message.tool_calls=}")  # DEBUG:REMOVE
 
         
 
@@ -493,12 +493,12 @@ async def generate_chat_completion(
 
         generations = await asyncio.gather(*gen_tasks)
 
-        logger.debug(f"_LOG: generate_chat_completion__generations: {generations}")  # DEBUG:REMOVE
+        # logger.debug(f"_LOG: generate_chat_completion__generations: {generations}")  # DEBUG:REMOVE
         # Let's not waste our time if we arn't running a tool model
         if data.tool_call_start:
-            logger.debug(f"_LOG: In data.tool_call_start")  # DEBUG:REMOVE
+            # logger.debug(f"_LOG: In data.tool_call_start")  # DEBUG:REMOVE
             generations = await generate_tool_calls(data, generations, request)
-            logger.debug(f"generate_chat_completion__tool__generations: {generations}")  # DEBUG:REMOVE
+            # logger.debug(f"generate_chat_completion__tool__generations: {generations}")  # DEBUG:REMOVE
 
         response = _create_response(request.state.id, generations, model_path.name, data.tool_class.postprocess_tool_call if data.tool_class else None)
 
@@ -530,27 +530,28 @@ async def generate_tool_calls(
     tool_data = data.model_copy(deep=True)
     tool_data.json_schema = tool_data.tool_call_schema
     gen_params = tool_data.model_dump()
-
-    logger.debug(f"_LOG: generate_tool_calls:\n{tool_data=}\n\n{tool_data.json_schema=}\n\n{gen_params=}\n\n")  # DEBUG:REMOVE
-    logger.debug(f"_LOG: generate_tool_calls:\n{generations=}\n\n{current_generations=}\n\n{tool_idx=}\n\n")  # DEBUG:REMOVE
+    logger.debug(f"_LOG: generate_tool_calls: {generations=}\n\n\n")
+    # logger.debug(f"_LOG: generate_tool_calls:\n{tool_data=}\n\n{tool_data.json_schema=}\n\n{gen_params=}\n\n")  # DEBUG:REMOVE
+    # logger.debug(f"_LOG: generate_tool_calls:\n{generations=}\n\n{current_generations=}\n\n{tool_idx=}\n\n")  # DEBUG:REMOVE
     for idx, gen in enumerate(generations):
-        logger.debug(f"_LOG: {idx=}\n\n{gen=}\n\n")
+        # logger.debug(f"_LOG: {idx=}\n\n{gen=}\n\n")
         if gen["stop_str"] in tool_data.tool_call_start:
-            logger.debug(f"_LOG: generate_tool_calls__gen[stop_str] in tool_data.tool_call_start: {gen=}")  # DEBUG:REMOVE
+            # logger.debug(f"_LOG: generate_tool_calls__gen[stop_str] in tool_data.tool_call_start: {gen=}")  # DEBUG:REMOVE
             if "text" in gen:
                 # non streaming, all generations will have the text they generated
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, gen["text"]
                 )
-                logger.debug(f"_LOG: generate_tool_calls__text in gen: {pre_tool_prompt=}")  # DEBUG:REMOVE
+                # logger.debug(f"_LOG: generate_tool_calls__text in gen: {pre_tool_prompt=}")  # DEBUG:REMOVE
             elif current_generations is not None:
                 # streaming, we wont have text in the generation,
                 # we'll have to use the current_generations
                 pre_tool_prompt, mm_embeddings = await apply_chat_template(
                     data, current_generations
                 )
-                logger.debug(f"_LOG: generate_tool_calls__text in gen, current_gen is not nonbe: {pre_tool_prompt=}")  # DEBUG:REMOVE
+                # logger.debug(f"_LOG: generate_tool_calls__text in gen, current_gen is not nonbe: {pre_tool_prompt=}")  # DEBUG:REMOVE
 
+            logger.debug(f"_LOG {pre_tool_prompt=}")
             gen_tasks.append(
                 asyncio.create_task(
                     model.container.generate(
@@ -564,11 +565,11 @@ async def generate_tool_calls(
             tool_idx.append(idx)
 
     tool_calls = await asyncio.gather(*gen_tasks)
-    logger.debug(f"_LOG: gather_too_calls: {tool_calls=}")  # DEBUG:REMOVE
+    # logger.debug(f"_LOG: gather_too_calls: {tool_calls=}")  # DEBUG:REMOVE
     for outer_idx in range(0, len(tool_idx)):
         gen_idx = tool_idx[outer_idx]
         generations[gen_idx]["tool_calls"] = tool_calls[outer_idx]["text"]
-        logger.debug(f"_LOG: for_loop_gen_idx: {tool_idx=}\n\n{gen_idx=}\n\n{generations[gen_idx]["tool_calls"]=}\n\n")  # DEBUG:REMOVE
+        # logger.debug(f"_LOG: for_loop_gen_idx: {tool_idx=}\n\n{gen_idx=}\n\n{generations[gen_idx]["tool_calls"]=}\n\n")  # DEBUG:REMOVE
 
     logger.debug(f"_LOG: final_generations_tool_call: {generations=}")  # DEBUG:REMOVE
     return generations

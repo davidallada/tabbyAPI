@@ -26,7 +26,7 @@ class WattFunctionHandler(FunctionCallingBaseClass):
     @classmethod
     def postprocess_tool_call(cls, call_str: str) -> List[ToolCall]:
         tool_calls = json.loads(call_str)
-        logger.debug(f"_LOG: in postprocess_tool_call: {call_str=}")  # DEBUG:REMOVE
+        # logger.debug(f"_LOG: in postprocess_tool_call: {call_str=}")  # DEBUG:REMOVE
         if isinstance(tool_calls, list):
             tool_call_list = []
             for tool_call in tool_calls:
