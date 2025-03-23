@@ -1,11 +1,11 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 from time import time
-from typing import Literal, Union, List, Optional, Dict
+from typing import Any, Literal, Union, List, Optional, Dict
 from uuid import uuid4
 
 from endpoints.OAI.types.common import UsageStats, CommonCompletionRequest
-from endpoints.OAI.types.tools import ToolSpec, ToolCall, tool_call_schema
+from endpoints.OAI.types.tools import ToolSpec, ToolCall, generate_json_schema, tool_call_schema
 
 
 class ChatCompletionLogprob(BaseModel):
@@ -81,6 +81,21 @@ class ChatCompletionRequest(CommonCompletionRequest):
     tool_call_start: SkipJsonSchema[Optional[List[Union[str, int]]]] = None
     tool_call_end: SkipJsonSchema[Optional[str]] = None
     tool_call_schema: SkipJsonSchema[Optional[dict]] = tool_call_schema
+    tabby_tool_class_name: SkipJsonSchema[Optional[str]] = None
+    tool_class: SkipJsonSchema[Optional[Any]] = None
+    skip_bos_token: SkipJsonSchema[Optional[bool]] = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def create_tool_call_schema(cls, values):
+        """
+        Create the customized schema from the tools passed in
+        """
+        tools = values.get("tools")
+        if tools:
+            values["tool_call_schema"] = generate_json_schema(tools)
+
+        return values
 
 
 class ChatCompletionResponse(BaseModel):

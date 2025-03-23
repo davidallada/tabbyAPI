@@ -19,6 +19,7 @@ from endpoints.Kobold.types.generation import (
     GenerateResponseResult,
     StreamGenerateChunk,
 )
+from endpoints.OAI.types.chat_completion import ChatCompletionMessage
 
 
 generation_cache = {}

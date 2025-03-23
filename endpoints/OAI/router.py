@@ -1,4 +1,6 @@
 import asyncio
+import json
+import re
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sse_starlette import EventSourceResponse
 from sys import maxsize
@@ -8,6 +10,7 @@ from common.auth import check_api_key
 from common.model import check_embeddings_container, check_model_container
 from common.networking import handle_request_error, run_with_request_disconnect
 from common.tabby_config import config
+from endpoints.OAI.tool_calling.base_tool_calling_class import get_tool_calling_class
 from endpoints.OAI.types.completion import CompletionRequest, CompletionResponse
 from endpoints.OAI.types.chat_completion import (
     ChatCompletionRequest,
@@ -16,6 +19,7 @@ from endpoints.OAI.types.chat_completion import (
 from endpoints.OAI.types.embedding import EmbeddingsRequest, EmbeddingsResponse
 from endpoints.OAI.utils.chat_completion import (
     apply_chat_template,
+    extract_jinja_set_variables,
     generate_chat_completion,
     stream_generate_chat_completion,
 )
@@ -25,6 +29,7 @@ from endpoints.OAI.utils.completion import (
     stream_generate_completion,
 )
 from endpoints.OAI.utils.embeddings import get_embeddings
+from loguru import logger
 
 
 api_name = "OAI"
@@ -120,6 +125,18 @@ async def chat_completion_request(
         ).error.message
 
         raise HTTPException(422, error_message)
+    else:
+        # For tool calling support, extract the class name (if any)
+        # to use for handling tool formatting
+        try:
+            static_jinja_vars: dict = extract_jinja_set_variables(
+                model.container.prompt_template.raw_template
+            )
+            data.tabby_tool_class_name = static_jinja_vars.get("tabby_tool_class_name")
+            data.tool_class = get_tool_calling_class(data.tabby_tool_class_name)
+            data.skip_bos_token = static_jinja_vars.get("skip_bos_token", False)
+        except Exception as e:
+            logger.exception(e)
 
     model_path = model.container.model_dir
 

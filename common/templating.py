@@ -77,6 +77,16 @@ class PromptTemplate:
             if isinstance(template_module.tool_start_token, int):
                 template_metadata.tool_starts.append(template_module.tool_start_token)
 
+        # To Support Tool Calling, specify a class to handle the templating and
+        # processing of tool calls
+        template_metadata.tabby_tool_class_name = None
+        if hasattr(template_module, "tabby_tool_class_name"):
+            if isinstance(template_module.tabby_tool_class_name, str):
+                template_metadata.tabby_tool_class_name = template_module.tabby_tool_class_name
+
+        if hasattr(template_module, "skip_bos_token"):
+            template_metadata.skip_bos_token = template_module.skip_bos_token
+
         self.metadata = template_metadata
         return template_metadata
 
